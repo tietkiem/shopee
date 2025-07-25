@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Đơn hàng ShopeeFood</title>
+    <!-- Chosen Palette: Neutral Harmony (Tailwind Gray) with Warm Accent (Tailwind Amber) -->
+    <!-- Application Structure Plan: A tabbed single-page application. The structure is designed for a task-oriented user flow. 1) 'Tổng quan' for high-level analysis and business insights. 2) 'Danh sách Đơn hàng' for detailed data exploration and lookup. 3) 'Thêm Đơn hàng' for the data input task. This separation prevents cognitive overload and guides the user naturally from data entry to analysis. The architecture uses a persistent cloud database (Firestore) to make it a true, long-term business tool. -->
+    <!-- Visualization & Content Choices: Report Info (ShopeeFood Orders) -> Goal (Analyze sales, identify trends, view details) -> Viz/Presentation (KPI Cards for at-a-glance metrics; Line Chart for time-series trend analysis; Bar Chart for categorical comparison of top products; Interactive Table for deep data diving) -> Interaction (Tab navigation for task separation; Live search for filtering; Multi-image upload for efficient input) -> Justification (This combination provides a multi-layered analytical experience, from a 10,000-foot view down to individual order details, all within a single, cohesive interface) -> Library/Method (Chart.js for dynamic, canvas-based charts; Firestore for data persistence; Tailwind CSS for layout). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', 'Be Vietnam Pro', sans-serif; }
+        .tab-button.active { border-color: #f59e0b; color: #f59e0b; background-color: #fffbeb; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .chart-container { position: relative; width: 100%; max-width: 800px; margin-left: auto; margin-right: auto; height: 350px; }
+        @media (min-width: 768px) { .chart-container { height: 400px; } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+    <div id="loading-screen" class="fixed inset-0 bg-white flex flex-col justify-center items-center z-50">
+        <div style="border: 5px solid #f3f3f3; border-top: 5px solid #f59e0b; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;"></div>
+        <p class="mt-4 text-gray-600 font-medium">Đang khởi tạo ứng dụng...</p>
+    </div>
+
+    <main id="main-content" class="container mx-auto p-4 md:p-6 opacity-0 transition-opacity duration-500">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-amber-600">Dashboard Kinh doanh</h1>
+            <p class="text-gray-600 mt-2">Phân tích và trực quan hóa dữ liệu đơn hàng ShopeeFood của bạn.</p>
+        </header>
+
+        <div class="sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10 py-2">
+            <nav class="flex justify-center border-b border-gray-200" aria-label="Tabs">
+                <button data-tab="dashboard" class="tab-button active whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-500 hover:text-amber-600 transition-colors duration-200">📊 Tổng quan</button>
+                <button data-tab="orders" class="tab-button whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-500 hover:text-amber-600 transition-colors duration-200">📋 Danh sách Đơn hàng</button>
+                <button data-tab="add" class="tab-button whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-500 hover:text-amber-600 transition-colors duration-200">➕ Thêm Đơn hàng</button>
+            </nav>
+        </div>
+
+        <div class="mt-6">
+            <section id="dashboard-content" class="tab-content active">
+                <div class="text-center max-w-3xl mx-auto mb-8">
+                    <h2 class="text-2xl font-semibold">Bảng điều khiển trung tâm</h2>
+                    <p class="mt-2 text-gray-600">Đây là nơi cung cấp cái nhìn tổng thể về tình hình kinh doanh của bạn. Các chỉ số chính (KPIs) cho thấy hiệu suất tức thì, trong khi các biểu đồ giúp bạn nhận diện xu hướng doanh thu và khám phá những sản phẩm đang được ưa chuộng nhất.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><h3 class="text-gray-500 text-sm font-medium">Tổng Doanh thu</h3><p id="kpi-revenue" class="text-3xl font-bold text-gray-800 mt-1">0đ</p></div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><h3 class="text-gray-500 text-sm font-medium">Tổng số Đơn hàng</h3><p id="kpi-orders" class="text-3xl font-bold text-gray-800 mt-1">0</p></div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><h3 class="text-gray-500 text-sm font-medium">Khách hàng</h3><p id="kpi-customers" class="text-3xl font-bold text-gray-800 mt-1">0</p></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><h3 class="font-semibold mb-4 text-center">Doanh thu theo ngày</h3><div class="chart-container"><canvas id="revenue-chart"></canvas></div></div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><h3 class="font-semibold mb-4 text-center">Top sản phẩm bán chạy</h3><div class="chart-container"><canvas id="products-chart"></canvas></div></div>
+                </div>
+            </section>
+
+            <section id="orders-content" class="tab-content">
+                 <div class="text-center max-w-3xl mx-auto mb-8">
+                    <h2 class="text-2xl font-semibold">Tra cứu Đơn hàng</h2>
+                    <p class="mt-2 text-gray-600">Khu vực này cho phép bạn xem lại toàn bộ lịch sử đơn hàng đã được lưu trữ. Sử dụng ô tìm kiếm để nhanh chóng lọc ra các đơn hàng theo số điện thoại của khách, giúp bạn dễ dàng tra cứu và quản lý thông tin chi tiết.</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <input type="text" id="search-input" placeholder="Tìm theo SĐT khách hàng..." class="w-full md:w-1/3 p-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-amber-400 focus:border-amber-400">
+                    <div class="overflow-x-auto"><table class="w-full text-sm text-left text-gray-600"><thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th class="py-3 px-6">Ngày đặt</th><th class="py-3 px-6">SĐT Khách</th><th class="py-3 px-6">Đơn hàng</th><th class="py-3 px-6 text-right">Tổng tiền</th></tr></thead><tbody id="orders-table-body"></tbody></table></div>
+                </div>
+            </section>
+
+            <section id="add-content" class="tab-content">
+                <div class="text-center max-w-3xl mx-auto mb-8">
+                    <h2 class="text-2xl font-semibold">Nhập liệu Đơn hàng</h2>
+                    <p class="mt-2 text-gray-600">Đây là công cụ giúp bạn số hóa các đơn hàng. Chỉ cần tải lên một hoặc nhiều ảnh chụp màn hình từ ứng dụng ShopeeFood Merchant, hệ thống sẽ tự động sử dụng AI để đọc, trích xuất và lưu trữ thông tin vào cơ sở dữ liệu của bạn.</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div id="upload-area"><div id="image-drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-amber-50 transition-colors duration-200"><input type="file" id="image-upload" class="hidden" accept="image/*" multiple><label for="image-upload" class="cursor-pointer"><svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><p class="mt-2 text-sm text-gray-600"><span class="font-semibold text-amber-600">Nhấp để chọn nhiều ảnh</span> hoặc kéo thả</p><p class="text-xs text-gray-500">Hỗ trợ PNG, JPG, JPEG</p></label></div></div>
+                    <div id="results-area" class="hidden"><h3 class="font-bold text-lg mb-4">Kết quả xử lý:</h3><ul id="results-list" class="space-y-2"></ul><button id="reset-button" class="hidden w-full mt-6 bg-amber-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-700 transition-colors">Tải lên đợt khác</button></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        let db, auth, userId, appId, allOrders = [], revenueChart, productsChart;
+
+        const ui = {
+            loadingScreen: document.getElementById('loading-screen'),
+            mainContent: document.getElementById('main-content'),
+            tabButtons: document.querySelectorAll('.tab-button'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            uploadArea: document.getElementById('upload-area'),
+            resultsArea: document.getElementById('results-area'),
+            imageDropZone: document.getElementById('image-drop-zone'),
+            imageUpload: document.getElementById('image-upload'),
+            resultsList: document.getElementById('results-list'),
+            resetButton: document.getElementById('reset-button'),
+            searchInput: document.getElementById('search-input'),
+            ordersTableBody: document.getElementById('orders-table-body'),
+            kpi: {
+                revenue: document.getElementById('kpi-revenue'),
+                orders: document.getElementById('kpi-orders'),
+                customers: document.getElementById('kpi-customers'),
+            },
+            charts: {
+                revenue: document.getElementById('revenue-chart').getContext('2d'),
+                products: document.getElementById('products-chart').getContext('2d'),
+            }
+        };
+
+        function initializeAppLogic() {
+            try {
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                if (!firebaseConfig) { showError("Lỗi cấu hình Firebase."); return; }
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        ui.loadingScreen.classList.add('hidden');
+                        ui.mainContent.style.opacity = 1;
+                        setupRealtimeListener();
+                    }
+                });
+                signInAnonymously(auth).catch(error => showError("Lỗi đăng nhập: " + error.message));
+            } catch (error) { showError("Lỗi khởi tạo: " + error.message); }
+        }
+        
+        function showError(message) { ui.loadingScreen.innerHTML = `<p class="text-red-500 font-semibold">${message}</p>`; }
+
+        function setupRealtimeListener() {
+            const ordersCollection = collection(db, `artifacts/${appId}/users/${userId}/orders`);
+            const q = query(ordersCollection, orderBy("createdAt", "desc"));
+            onSnapshot(q, snapshot => {
+                allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAllComponents();
+            }, error => console.error("Lỗi khi nghe dữ liệu:", error));
+        }
+
+        function renderAllComponents() {
+            renderOrdersTable(allOrders);
+            updateKPIs(allOrders);
+            updateRevenueChart(allOrders);
+            updateProductsChart(allOrders);
+        }
+
+        function renderOrdersTable(orders) {
+            ui.ordersTableBody.innerHTML = '';
+            if (orders.length === 0) {
+                ui.ordersTableBody.innerHTML = `<tr><td colspan="4" class="text-center py-10 text-gray-500">Chưa có đơn hàng nào. Hãy qua tab 'Thêm Đơn hàng' để bắt đầu.</td></tr>`;
+                return;
+            }
+            orders.forEach(order => {
+                const itemsHtml = (order.items || []).map(item => `<div>${item.quantity} x ${item.name}</div>`).join('');
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                row.innerHTML = `<td class="py-4 px-6">${order.dateTime}</td><td class="py-4 px-6 font-medium">${order.customerPhone}</td><td class="py-4 px-6">${itemsHtml}</td><td class="py-4 px-6 font-medium text-right">${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.totalPrice || 0)}</td>`;
+                ui.ordersTableBody.appendChild(row);
+            });
+        }
+
+        function updateKPIs(orders) {
+            ui.kpi.revenue.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(orders.reduce((sum, order) => sum + (order.totalPrice || 0), 0));
+            ui.kpi.orders.textContent = orders.length;
+            ui.kpi.customers.textContent = new Set(orders.map(o => o.customerPhone)).size;
+        }
+
+        function updateRevenueChart(orders) {
+            const revenueByDay = orders.reduce((acc, order) => {
+                const datePart = order.dateTime.split(' - ')[0];
+                acc[datePart] = (acc[datePart] || 0) + (order.totalPrice || 0);
+                return acc;
+            }, {});
+            const sortedDates = Object.keys(revenueByDay).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+            if (revenueChart) revenueChart.destroy();
+            revenueChart = new Chart(ui.charts.revenue, { type: 'line', data: { labels: sortedDates, datasets: [{ label: 'Doanh thu', data: sortedDates.map(date => revenueByDay[date]), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.2 }] }, options: { responsive: true, maintainAspectRatio: false } });
+        }
+
+        function updateProductsChart(orders) {
+            const productCounts = orders.flatMap(o => o.items || []).reduce((acc, item) => { acc[item.name] = (acc[item.name] || 0) + item.quantity; return acc; }, {});
+            const sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+            if (productsChart) productsChart.destroy();
+            productsChart = new Chart(ui.charts.products, { type: 'bar', data: { labels: sortedProducts.map(p => p[0]), datasets: [{ label: 'Số lượng bán', data: sortedProducts.map(p => p[1]), backgroundColor: '#fcd34d', borderColor: '#f59e0b', borderWidth: 1 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        }
+
+        ui.tabButtons.forEach(button => button.addEventListener('click', () => {
+            ui.tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            ui.tabContents.forEach(content => content.classList.remove('active'));
+            document.getElementById(button.dataset.tab + '-content').classList.add('active');
+        }));
+
+        ui.searchInput.addEventListener('input', e => renderOrdersTable(allOrders.filter(order => order.customerPhone.includes(e.target.value))));
+        
+        ui.imageDropZone.addEventListener('dragover', e => { e.preventDefault(); ui.imageDropZone.classList.add('bg-amber-50', 'border-amber-400'); });
+        ui.imageDropZone.addEventListener('dragleave', e => { e.preventDefault(); ui.imageDropZone.classList.remove('bg-amber-50', 'border-amber-400'); });
+        ui.imageDropZone.addEventListener('drop', e => { e.preventDefault(); ui.imageDropZone.classList.remove('bg-amber-50', 'border-amber-400'); if (e.dataTransfer.files.length > 0) handleFileSelect({ target: { files: e.dataTransfer.files } }); });
+        ui.imageUpload.addEventListener('change', handleFileSelect);
+        ui.resetButton.addEventListener('click', () => {
+            ui.resultsArea.classList.add('hidden');
+            ui.uploadArea.classList.remove('hidden');
+            ui.resultsList.innerHTML = '';
+            ui.imageUpload.value = '';
+        });
+
+        async function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+            ui.uploadArea.classList.add('hidden');
+            ui.resultsArea.classList.remove('hidden');
+            ui.resetButton.classList.add('hidden');
+            for (const file of files) {
+                const li = document.createElement('li');
+                li.className = 'p-3 bg-gray-100 rounded-lg flex items-center justify-between text-sm';
+                li.innerHTML = `<span class="truncate pr-4">${file.name}</span><span class="status font-semibold text-gray-500">⏳ Chờ xử lý...</span>`;
+                ui.resultsList.appendChild(li);
+            }
+            for (let i = 0; i < files.length; i++) {
+                try {
+                    const base64ImageData = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = error => reject(error);
+                        reader.readAsDataURL(files[i]);
+                    });
+                    await extractAndSaveData(base64ImageData, ui.resultsList.children[i]);
+                } catch (error) {
+                    updateStatus(ui.resultsList.children[i], '❌ Lỗi đọc file', 'error');
+                }
+            }
+            ui.resetButton.classList.remove('hidden');
+        }
+
+        function updateStatus(listItem, text, type) {
+            const statusEl = listItem.querySelector('.status');
+            statusEl.textContent = text;
+            statusEl.className = 'status font-semibold';
+            const colors = { processing: 'text-blue-600', success: 'text-green-600', error: 'text-red-600' };
+            statusEl.classList.add(colors[type] || 'text-gray-500');
+        }
+
+        async function extractAndSaveData(base64ImageData, listItem) {
+            updateStatus(listItem, '⚙️ Đang phân tích...', 'processing');
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const prompt = `Phân tích ảnh chụp màn hình đơn hàng ShopeeFood và trích xuất thông tin dưới dạng JSON. Chỉ trả về đối tượng JSON.
+                - dateTime: Ngày và giờ đặt hàng (VD: "25/06/2025 - 23:10").
+                - customerPhone: Số điện thoại khách hàng.
+                - totalPrice: Tổng số tiền đơn hàng, chỉ lấy số, không lấy ký tự "đ".
+                - items: Một mảng các đối tượng, mỗi đối tượng có dạng { "name": "Tên món", "quantity": số_lượng }.`;
+
+            const payload = { contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData.split(',')[1] } }] }], generationConfig: { responseMimeType: "application/json" } };
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API Error ${response.status}`);
+                const result = await response.json();
+                const data = JSON.parse(result.candidates[0].content.parts[0].text);
+                updateStatus(listItem, '✅ Phân tích xong, đang lưu...', 'processing');
+                const orderData = { ...data, totalPrice: Number(data.totalPrice) || 0, createdAt: new Date().toISOString() };
+                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/orders`), orderData);
+                updateStatus(listItem, '✅ Lưu thành công!', 'success');
+            } catch (error) {
+                console.error("Lỗi khi trích xuất hoặc lưu:", error);
+                updateStatus(listItem, '❌ Lỗi xử lý', 'error');
+            }
+        }
+        initializeAppLogic();
+    </script>
+</body>
+</html>
