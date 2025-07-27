@@ -79,7 +79,7 @@
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         // ===================================================================================
-        // DÁN THÔNG TIN CẤU HÌNH FIREBASE CỦA BẠN VÀO ĐÂY
+        // CẤU HÌNH FIREBASE CỦA BẠN
         // ===================================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyCe4ZmEkZlV_whsXnvQtd92R-lzCzoLR-U",
@@ -227,7 +227,7 @@
 
         async function extractAndSaveData(base64ImageData, listItem) {
             updateStatus(listItem, '⚙️ Đang phân tích...', 'processing');
-            const apiKey = "";
+            const apiKey = firebaseConfig.apiKey; // Use apiKey from your config
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const prompt = `Phân tích ảnh chụp màn hình đơn hàng ShopeeFood và trích xuất thông tin dưới dạng JSON. Chỉ trả về đối tượng JSON.
                 - dateTime: Ngày và giờ đặt hàng (VD: "25/06/2025 - 23:10").
