@@ -227,7 +227,7 @@
 
         async function extractAndSaveData(base64ImageData, listItem) {
             updateStatus(listItem, '⚙️ Đang phân tích...', 'processing');
-            const apiKey = firebaseConfig.apiKey; // Use apiKey from your config
+            const apiKey = firebaseConfig.apiKey;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const prompt = `Phân tích ảnh chụp màn hình đơn hàng ShopeeFood và trích xuất thông tin dưới dạng JSON. Chỉ trả về đối tượng JSON.
                 - dateTime: Ngày và giờ đặt hàng (VD: "25/06/2025 - 23:10").
@@ -247,7 +247,11 @@
                 updateStatus(listItem, '✅ Lưu thành công!', 'success');
             } catch (error) {
                 console.error("Lỗi khi trích xuất hoặc lưu:", error);
-                updateStatus(listItem, '❌ Lỗi xử lý', 'error');
+                if (error.message && error.message.includes('403')) {
+                    updateStatus(listItem, '❌ Lỗi quyền API (403)', 'error');
+                } else {
+                    updateStatus(listItem, '❌ Lỗi xử lý', 'error');
+                }
             }
         }
         initializeAppLogic();
